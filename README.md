@@ -52,11 +52,24 @@ Size is in bytes
 
 ```
 
+### cleanLayout
+If false it will save the .json data with no new lines or tabbing (harder to read by human).
+Other wise it will save it with new lines and tabbing (cleaner reading for human, also larger file size).
+
+### ignoreMain
+If true the database will from then on not use the main drive to store data.
+
+### autoMigrate
+If true it will mean that if a file becomes too large it will automatically more it to a new drive.
+
+### removeOldFiles
+If false it will mean that if there are duplicate items saved across the database it will delete the oldest one.
+
 ___
 
 
 
-# Main functions
+# Data manipulation
 
 ## new(type, id, callback)
 This will create a new database item of which will reference the template (type).
@@ -68,7 +81,6 @@ db.set, or, db.save.
 ## newSync(type, id)
 Same as db.new but there is no callback and it is a synchronous function of which
 will return true / false, for success or fail.  
-
 
 ## exists(type, id, callback)
 Will return true or false whether or not the item exists.
@@ -131,6 +143,27 @@ The callback will have the data for success or not
 ## migrateSync(type, id, driveTo)
 Same as db.migrate but there is no callback and it is a synchronous function of which
 will return the true or false, for success or fail.
+
+## list(type)
+If type is left undefined it will return an array of types of data item.  
+If the type is a string it will return an array of all items of that type.  
+If type = 'any' then it will return all items ids of all types.  
+If type = 'anytype' then it will return all items ids of all types in the syntax type\\id.  
+
+
+
+___
+
+
+
+# Buffers
+These functions will allow you to save buffers straight into the database, so that things such as files can be stored in the database.
+
+## BufferToObject(buffer)
+This will return an object interpretation of the buffer.
+
+## BufferFromObject(object)
+If inputted a object created from db.BufferToObject it will return a buffer exactly the same as the original buffer inputted to db.BufferToObject
 
 
 
@@ -220,6 +253,18 @@ This will allow you to get the amount of bytes taken up in the database for a
 specific drive.
 This will also update the index for that drive.
 
+## listDrives()
+Will return an array of all drive ids
+
+## addDrive(id, size, location)
+Will add a new drive to the database's config and will be operational instantly.
+
+## getDriveUssage()
+returns; bytes used, bytes available for use, total drive size, number of unrestricted drives (drives with no max space defined)
+
 ## pickDrive(dataSizeInBytes)
 Not necessary, this function will return a drive of which to fit a file of the
 size specified (default 0).
+
+## GetObjectSize(object)
+This will return the amount of bytes of which that object will use if saved as a JSON with !cleanLayout.

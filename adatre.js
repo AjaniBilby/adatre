@@ -36,12 +36,29 @@ class Database{
     //Read config
     if (fs.existsSync('./database/config.json')){
       this.config = this.readFileSync('./database/config.json');
+
+      //If config drives are valid add them to memory
       if (this.config.drives){
         this.drives = this.config.drives;
       }
-      if (this.config.cleanLayout){
-        this.cleanLayout = this.config.cleanLayout;
+
+      //Get removeOldFiles config with default being true
+      if (this.config.autoMigrate === undefined){
+        this.autoMigrate = true;
+      }else{
+        this.autoMigrate = this.config.autoMigrate;
       }
+
+      //Get removeOldFiles config with default being true
+      if (this.config.removeOldFiles === undefined){
+        this.removeOldFiles = true;
+      }else{
+        this.removeOldFiles = this.config.removeOldFiles;
+      }
+
+      //Set values from config with default being undefined
+      this.cleanLayout = this.config.cleanLayout;
+      this.ignoreMain = this.config.ignoreMain;
     }else{
       this.config = null;
     }
@@ -63,12 +80,64 @@ class Database{
     this.indexDrives();
   }
 }
-//Root functions
+//Drive functions
 Database.prototype.indexDrives = function(){
+  var db = this;
+
+  var mtime = {};
+
   //Refresh drive ussage
-  for (let key in this.drives){
-    this.getDriveSize(key);
-    this.drives[key].id = key;
+  for (let id in this.drives){
+    var size = 0;
+
+    for (let folder of fs.readdirSync(this.drives[id].location)){
+      if (folder.indexOf('.') == -1){
+        //Make sure that index is setup for this type
+        if (!ob.isObject(db.index[folder])){
+          db.index[folder] = {};
+        }
+        if (!ob.isObject(mtime[folder])){
+          mtime[folder] = {};
+        }
+
+        for (let file of fs.readdirSync(this.drives[id].location+'/'+folder)){
+
+          if (file.indexOf('.json') != file.length-5){
+            //If the filename does not end in JSON do not inclue it
+            continue;
+          }
+
+          var stats = fs.statSync(this.drives[id].location+'/'+folder+'/'+file);
+          if (typeof(stats.size) == "number"){
+            size += stats.size;
+          }
+
+          var name = file.substr(0, file.length-5);
+
+          if (this.removeOldFiles){
+            //If has not been indexed in other drive
+            if (!mtime[folder][name]){
+
+              //Add database item to index
+              this.index[folder][name] = {size: stats, drive: id, location: this.drives[id].location+'/'+folder+'/'+file};
+              mtime[folder][name] = stats.mtime;
+
+            }else if (mtime[folder][name] <= stats.mtime){
+              //If this option is newer
+              fs.unlink(this.drives[id].location+'/'+folder+'/'+file); //Delete old file
+
+              //Updated item in index
+              this.index[folder][name] = {size: stats, drive: id, location: this.drives[id].location+'/'+folder+'/'+file};
+              mtime[folder][name] = stats.mtime;
+            }
+          }else{
+            this.index[folder][name] = {size: stats, drive: id, location: this.drives[id].location+'/'+folder+'/'+file};
+          }
+        }
+      }
+    }
+
+    this.drives[id].used = size;
   }
 };
 Database.prototype.getDriveSize = function(id){
@@ -114,12 +183,78 @@ Database.prototype.getDriveSize = function(id){
 
   return size;
 };
-Database.prototype.pickDrive = function(size){
+Database.prototype.addDrive = function(id, size, location){
+  //Check that parameters are correct
+  if (id === undefined || id === true || id === false || id === null){
+    console.error("Database: cannot create drive with invalid id ("+id+")");
+    return false;
+  }
+  if (typeof(this.drives[id]) == "object"){
+    console.error("Database: cannot create drive, id already in use ("+id+")");
+    return false;
+  }
+  if (typeof(size) != "number"){
+    console.error("Database: cannot create drive with invalid size ("+size+"). Size must be a number");
+    return false;
+  }
+  if (typeof(location) != "string" || !fs.statSync(location).isDirectory()){
+    console.error("Database: cannot create drive with invalid location ("+location+"). Location must be a string directing to a valid folder");
+    return false;
+  }
+
+  //Add new drive to memory
+  this.drives[id] = {
+    location: location,
+    size: -1
+  };
+
+  //Save drive to config
+  this.config.drives[id] = this.drives[id];
+  fs.writeFileSync('./database/config.json', JSON.stringify(this.config, null, "\t"));
+
+  //Index new drive
+  this.getDriveSize(id);
+
+  return true;
+};
+Database.prototype.listDrives = function(){
+  return Object.keys(this.drives);
+};
+Database.prototype.getDriveUssage = function(){
+  var output = {
+    used: 0,
+    available: 0,
+    limit: 0,
+    unlimitedDrives: 0
+  };
+
+  for (let key in this.drives){
+    if (key == "MAIN" && this.ignoreMain){
+      continue;
+    }else{
+      this.getDriveSize(key);
+      if (this.drives[key].size == -1){
+        output.unlimitedDrives += 1;
+      }else{
+        output.limit += this.drives[key].size;
+        output.used += this.drives[key].used;
+      }
+    }
+  }
+
+  output.available = output.limit - output.used;
+
+  return output;
+};
+Database.prototype.pickDrive = function(size = 10){
   var selection = [];
 
   for (let key in this.drives){
-    selection.push(new Object(this.drives[key]));
-    selection[selection.length-1].id = key;
+    //If there is space in drive add it as a possible option
+    if (this.drives[key].size == -1 || this.drives[key].size-this.drives[key].used > size){
+      selection.push(new Object(this.drives[key]));
+      selection[selection.length-1].id = key;
+    }
   }
 
   selection = selection.sort(function(a, b){
@@ -146,12 +281,20 @@ Database.prototype.pickDrive = function(size){
 
   });
 
-  if (selection[0].id == "MAIN" && selection.length > 1){
-    console.error("Database: Ran out of drive space, using main as back up");
+  //If first option is main drive and main drive is supposed to be ignored then remove it as an option
+  if (selection[0].id == "MAIN" && this.ignoreMain){
+    selection.splice(0, 1);
   }
 
-  return this.drives[selection[0].id];
+  if (selection.length > 0){
+    return this.drives[selection[0].id];
+  }else{
+    console.error("Database: not enough space to store item");
+    return null;
+  }
 };
+
+//Custom write functions
 Database.prototype.writeFile = function(location, data, callback){
   if (GetExtention(location) == "json"){
     try {
@@ -216,6 +359,71 @@ Database.prototype.readFileSync = function(location){
 
   return data;
 };
+Database.prototype.list = function(type){
+  var list = [];
+
+  if (type === undefined){
+    for (let key in this.index){
+      list.push(key);
+    }
+  }else{
+    if (type == 'any' || type == "anytype"){
+      for (let type in this.index){
+        for (let key in this.index[type]){
+          list.push(type+'\\'+key);
+        }
+      }
+    }else if (typeof(this.index[type]) == "object"){
+      for (let key in this.index[type]){
+        list.push(key);
+      }
+    }
+  }
+
+  return list;
+};
+
+//Buffer manipulation
+Database.prototype.BufferToObject = function(buffer){
+  return JSON.parse(JSON.stringify(buffer));
+};
+Database.prototype.BufferFromObject = function(object){
+  if (object.type != "Buffer"){
+    console.error("Invalid buffer object");
+    return null;
+  }
+
+  return new Buffer(object.data);
+};
+
+//OTHER
+Database.prototype.GetObjectSize = function(object){
+  var bytes = 1; //Plus one for the open and close bracket minus one for the last item not having a comma
+
+  if (ob.isArray(object)){
+    for (let index in object){
+      bytes += object[index].toString().length + 1;
+    }
+  }else{
+    for (let key in object){
+      bytes += key.length+4; //Plus two for the talking marks, colen, and comma
+
+      switch (typeof(object[key])) {
+        case "object":
+          bytes += this.GetObjectSize(object[key]);
+          break;
+        case "string":
+          bytes = object[key].length+2; //Plus two for the talking marks
+          break;
+        default:
+          bytes += object[key].toString().length;
+      }
+    }
+  }
+
+  return bytes;
+};
+
 
 //asynchronous functions
 Database.prototype.new = function(type, id, callback){
@@ -241,6 +449,10 @@ Database.prototype.new = function(type, id, callback){
 
   //Pick drive
   var drive = this.pickDrive();
+  if (drive === null){
+    callback(false, 'no space');
+    return false;
+  }
   db.index[type][id] = {location: drive.location+'/'+type+'/'+id+'.json', size: 2, drive: drive.id};
 
 
@@ -251,7 +463,7 @@ Database.prototype.new = function(type, id, callback){
   }
 
 
-  db.writeFile(db.index[type][id].location, '{}', function(err){
+  db.writeFile(db.index[type][id].location, {}, function(err){
     if (err){
       if (typeof(callback) == "function"){
         callback(false, err);
@@ -294,17 +506,20 @@ Database.prototype.get = function(type, id, callback){
   var db = this;
 
   //Create cache
+  if (typeof(this.cache.activeReading[type]) == "object"){
+  }
+
   if (typeof(this.cache.activeReading[type]) != "object"){
     this.cache.activeReading[type] = {};
     this.cache.activeReading[type][id] = [];
-  }else if (typeof(this.cache.activeReading[type][id] != "object")){
+  }else if (typeof(this.cache.activeReading[type][id]) != "object"){
     this.cache.activeReading[type][id] = [];
   }
   this.cache.activeReading[type][id].push(callback);
 
   //If the file is not currently being ready then read it,
   //else wait for the file to finish reading from a previouse call
-  if (this.cache.activeReading[type][id].length == 1){
+  if (this.cache.activeReading[type][id].length > 0){
     var template; //db.templateFolder+'/'+type+'.json'
     var fileData; //drive+'/'+type+'/'+id+'.json'
     var partFailure = false;
@@ -319,12 +534,16 @@ Database.prototype.get = function(type, id, callback){
           output = ob.merge(template || {}, fileData || {});
         }
 
-        for (let callback of db.cache.activeReading[type][id]){
-          if (typeof(callback) == "function"){
+        while (db.cache.activeReading[type][id].length > 0){
+          if (typeof(db.cache.activeReading[type][id][0]) == "function"){
+
+            //Cache the callback about to be ran
+            var callback = db.cache.activeReading[type][id][0];
+            db.cache.activeReading[type][id].splice(0,1); //Remove it from queue
+
             callback(output);
           }
         }
-        db.cache.activeReading[type][id] = [];
       }
 
 
@@ -341,15 +560,8 @@ Database.prototype.get = function(type, id, callback){
             AttemptFinish(null);
             return;
           }else{
-            try{
-              template = data;
-            }catch(e){
-              AttemptFinish(null);
-              return;
-            }finally{
-              AttemptFinish(0);
-              return;
-            }
+            template = data;
+            AttemptFinish(0);
           }
         });
       }else{
@@ -365,15 +577,8 @@ Database.prototype.get = function(type, id, callback){
             AttemptFinish(null);
             return;
           }else{
-            try{
-              fileData = data;
-            }catch(e){
-              AttemptFinish(null);
-              return;
-            }finally{
-              AttemptFinish(1);
-              return;
-            }
+            fileData = data;
+            AttemptFinish(1);
           }
         });
       }else{
@@ -417,20 +622,36 @@ Database.prototype.getTemplate = function(type, callback){
   });
 };
 Database.prototype.save = function(type, id, data, callback){
+
   var db = this;
-  var callbacks = [];
+  var callbacks = [callback];
 
   //If item is not in index then cancel
-  if (typeof(this.index[type]) != "object"|| typeof(this.index[type][id]) != "object" || typeof(this.index[type][id].location) != "string"){
+  if (typeof(this.index[type]) != "object" || typeof(this.index[type][id]) != "object" || typeof(this.index[type][id].location) != "string"){
     console.error("Database cannot create new items though save\nItems must be created with \"db.new\" first");
     callback(false, null);
     return;
   }
 
-  //If file has became too big migrate file then retry
-  if ( (this.drives[this.index[type][id].drive].used+(data-this.index[type][id].size)) > this.drives[this.index[type][id].drive].size) {
-    var newDrive = db.pickDrive();
-    if (newDrive.id != this.index[type][id].drive.id){
+  //If database is allowed to auto migrate
+  if (this.autoMigrate){
+
+    //If the file is too large attempt migration
+    var cDrive = this.index[type][id].drive;
+    var size = this.GetObjectSize(data);
+
+    if ( size-this.index[type][id].size + this.drives[cDrive].used >= this.drives[cDrive].size ){
+      var newDrive = this.pickDrive();
+      if (newDrive.id === null || newDrive.id == cDrive){
+        console.error("Database: File data to save is too large for this drive ("+cDrive+") and there are no alternative drives to migrate too\n("+type+" - "+id+")");
+
+        if (typeof(callback) == "function"){
+          callback(false);
+        }
+
+        return false;
+      }
+
       //Migrate file then save new data
       db.migrate(type, id, newDrive, function(){
         db.save(type, id, data, callback);
@@ -440,25 +661,30 @@ Database.prototype.save = function(type, id, data, callback){
     }
   }
 
+
+
   function end(success, data){
+
     //If there are still queued items save data
-    if (db.cache.activeWriting.length > 0){
+    if (db.cache.activeWriting.length > 1){
       //Generate mergeed task to save all awaiting saves for this item
       var output = {};
-      for (let item of db.cache.activeWriting[type][id]){
-        if (typeof(item) != "object"){
-          continue;
-        }
 
+      while (db.cache.activeWriting[type][id].length > 0){
         output = ob.passNew(output, item.data);
         if (typeof(item.callback) == "function"){
-          callbacks.push(item.callback);
+          callbacks[callbacks.length] = item.callback;
         }
+
+        //Remove the just ran item
+        db.cache.activeWriting[type][id].splice(0,1);
       }
-      db.cache.activeWriting[type][id] = [];
 
       db.save(type, id, output);
     }
+
+    //Remove this task from activity
+    db.cache.activeWriting[type][id].splice(0,1);
 
     for (let callback of callbacks){
       if (typeof(callback) == "function"){
@@ -471,16 +697,13 @@ Database.prototype.save = function(type, id, data, callback){
   if (typeof(this.cache.activeWriting[type]) != "object"){
     this.cache.activeWriting[type] = {};
     this.cache.activeWriting[type][id] = [];
-  }else if (typeof(this.cache.activeWriting[type][id] != "object")){
+  }else if (typeof(this.cache.activeWriting[type][id]) != "object"){
     this.cache.activeWriting[type][id] = [];
   }
 
-  //Add current task to process list
-  var index = ob.firstUndefined(this.cache.activeWriting[type][id]);
-  this.cache.activeWriting[type][id][index] = {data: data, callback: callback};
-
   //If already active then queue task
   if (this.cache.activeWriting[type][id].length > 1){
+    this.cache.activeWriting[type][id].push({data: data, callback: callback});
     return;
   }
 
@@ -496,45 +719,30 @@ Database.prototype.save = function(type, id, data, callback){
       db.index[type] = {};
     }
 
-    db.get(type, id, function(data){
-      //If item does not exist then generate base data
-      if (!data || typeof(data) != "object"){
-        data = {};
+    //Generate mergeed task to save all awaiting saves for this item
+    var output = data;
+    for (let item of db.cache.activeWriting[type][id]){
+
+      if (typeof(item) != "object"){
+        continue;
       }
 
-
-
-      //Generate mergeed task to save all awaiting saves for this item
-      var output = {};
-      for (let item of db.cache.activeWriting[type][id]){
-        if (typeof(item) != "object"){
-          continue;
-        }
-
-        output = ob.passNew(output, item.data);
-        if (typeof(item.callback) == "function"){
-          callbacks.push(item.callback);
-        }
+      output = ob.passNew(output, item.data);
+      if (typeof(item.callback) == "function"){
+        callbacks.push(item.callback);
       }
-      db.cache.activeWriting[type][id] = [];
+    }
+    db.cache.activeWriting[type][id] = [];
 
-      //Remove template data
-      output = ob.passNew(template, output);
+    //Remove template data
+    output = ob.passNew(template, output);
 
-
-      db.writeFile(db.index[type][id].location, output, function(err){
-        if (err){
-          if (typeof(callback) == "function"){
-            end(false, null);
-          }
-          return;
-        }
-
-        if (typeof(callback) == "function"){
-          end(true, output);
-          return;
-        }
-      });
+    db.writeFile(db.index[type][id].location, output, function(err){
+      if (err){
+        end(false, null);
+      }else{
+        end(true, output);
+      }
     });
   });
 };
@@ -554,6 +762,8 @@ Database.prototype.set = function(type, id, newData, callback){
       if (typeof(callback) == "function"){
         callback(success, data);
       }
+
+      return;
     });
   }
 
@@ -575,6 +785,7 @@ Database.prototype.set = function(type, id, newData, callback){
         return;
       }else{
         HasData(db.cache.activeWriting[type][id][0]);
+        return;
       }
     }
 
@@ -583,11 +794,13 @@ Database.prototype.set = function(type, id, newData, callback){
     if (data === null){
       if (typeof(callback) == "function"){
         callback(null);
+        return;
       }
       return;
     }
 
     HasData(data);
+    return;
   });
 };
 Database.prototype.open = function(type, id, callback){
@@ -597,7 +810,7 @@ Database.prototype.open = function(type, id, callback){
   if (typeof(db.cache.open[type]) != "object"){
     db.cache.open[type] = {};
     db.cache.open[type][id] = [];
-  }else if (typeof(this.cache.open[type][id] != "object")){
+  }else if (typeof(this.cache.open[type][id]) != "object"){
     db.cache.open[type][id] = [];
   }
   db.cache.open[type][id].push(callback);
@@ -653,15 +866,16 @@ Database.prototype.migrate = function(type, id, to, callback){
 
   //Get data
   db.get(type, id, function(data){
+
     //Re-index
+    var oldLoc = db.index[type][id].location;
     db.index[type][id].location = to.location+'/'+type+'/'+id+'.json';
     db.index[type][id].drive = to.id;
 
     from.used -= db.index[type][id].size;
     to.used += db.index[type][id].size;
 
-    //Does the drive have the type setup
-    //If not set it up
+    //Does the drive have the type setup, if not set it up
     if (fs.readdirSync(to.location).indexOf(type) == -1){
       fs.mkdirSync(to.location+"/"+type);
     }
@@ -675,9 +889,7 @@ Database.prototype.migrate = function(type, id, to, callback){
         //Reset back
         db.index[type][id].location = from.location+'/'+type+'/'+id+'.json';
         db.index[type][id].drive = from.id;
-        if (typeof(callback) == "function"){
-          callback(false);
-        }
+        callback(false);
       }
     });
   });
@@ -702,6 +914,9 @@ Database.prototype.newSync = function(type, id){
 
   //Pick drive
   var drive = this.pickDrive();
+  if (drive === null){
+    return false;
+  }
   this.index[type][id] = {location: drive.location+'/'+type+'/'+id+'.json', size: 2, drive: drive.id};
 
 
@@ -712,7 +927,7 @@ Database.prototype.newSync = function(type, id){
   }
 
 
-  db.writeFileSync(this.index[type][id].location, '{}');
+  this.writeFileSync(this.index[type][id].location, '{}');
   return true;
 };
 Database.prototype.getSync = function(type, id){
@@ -725,7 +940,7 @@ Database.prototype.getSync = function(type, id){
     this.cache.activeReading[type] = {};
     this.cache.activeReading[type][id] = [];
   }
-  if (typeof(this.index[type][id]) != "object"){
+  if (typeof(this.cache.activeReading[type][id]) != "object"){
     this.cache.activeReading[type][id] = [];
   }
 
@@ -767,7 +982,7 @@ Database.prototype.saveSync = function(type, id, data){
     this.cache.activeWriting[type] = {};
     this.cache.activeWriting[type][id] = [];
   }
-  if (typeof(this.index[type][id]) != "object"){
+  if (typeof(this.cache.activeReading[type][id]) != "object"){
     this.cache.activeWriting[type][id] = [];
   }
 
@@ -791,6 +1006,21 @@ Database.prototype.saveSync = function(type, id, data){
 
   //Remove template data
   output = ob.passNew(template, output);
+
+  //If database is allowed to auto migrate
+  if (this.autoMigrate){
+    //If the file is too large attempt migration
+    if ( this.GetObjectSize(output)-this.index[type][id].size + this.drives[this.index[type][id].drive].used >= this.drives[this.index[type][id].drive].size ){
+      var newDrive = this.pickDrive();
+      if (newDrive.id === null){
+        console.error("Database: File new file data to save is too large for drive and there are no alternative drives to migrate too\n("+type+" - "+id+")");
+        return false;
+      }
+
+      //Migrate file to new drive before continuing
+      this.migrateSync(type, id, newDrive);
+    }
+  }
 
   //Write file
   this.writeFileSync(this.index[type][id].location, output);
@@ -1001,8 +1231,6 @@ class DataReference{
 
   set data(data){
     this.cache = ob.merge(this.cache, data);
-
-    console.log('save', this.autosave);
 
     if (this.autosave){
       this.save();
