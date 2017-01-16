@@ -38,13 +38,11 @@ var defualtUser = {
 
 //Setup profile defualts
 if (typeof(fs.readdirSync("./database/")) == "object"){
-    var folderData = fs.readdirSync("./database/templates");
+    var folderData = fs.readdirSync("./database/templates/");
     if (typeof(folderData) == "object"){
       //Dose profile template exist?
-      if (folderData.indexOf("profile") == -1){
+      if (folderData.indexOf("profile.json") == -1){
         fs.writeFileSync("./database/templates/profile.json", JSON.stringify(defualtUser, null, 2));
-      }else{
-        defualtUser = JSON.parse(fs.readFileSync("./database/templates/profile.json", 'utf8'));
       }
     }else{
       console.log("***Error***: Database/templates are non-existent");

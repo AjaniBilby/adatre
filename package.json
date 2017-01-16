@@ -1,6 +1,5 @@
 {
   "name": "adatre",
-  "version": "1.0.3",
   "description": "Async nodejs referencing database manager",
   "main": "adatre.js",
   "scripts": {

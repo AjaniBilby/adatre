@@ -120,6 +120,11 @@ The callback will have the data success and data. (Look at db.set for example).
 Same as db.save but there is no callback and it is a synchronous function of which
 will return the true or false, for success or fail.
 
+## remove(type, id, callback)
+This will delete the database item.
+## removeSync(type, id)
+This will delete the database item.
+
 ## open(type, id, callback)
 This is one of the more complex functions of which will allow you to open a
 database item and edit it then on return it will save the new data.
@@ -175,14 +180,14 @@ ___
 # Profiles
 There is a built in component to create user profiles, this built in component will have profile create and login pre-made as well as password encryption.
 
-## profile.new(username, password, callback)
+## newProfile(username, password, callback)
 This will create a new profile database item with the username as the id, and then also encrypt the password. It will parse though the callback true or false for success or fail.
-## profile.newSync(username, password, callback)
-This function is the same as profile.new but it is synchronous and will return true or false for success or fail.
-## profile.login(username, password, callback)
+## newSyncProfile(username, password, callback)
+This function is the same as newProfile but it is synchronous and will return true or false for success or fail.
+## loginProfile(username, password, callback)
 This function will allow you to parse in a username and the attempted password and the callback will parse true or false for success or fail.
-## profile.loginSync(username, password, callback)
-This function is the same as profile.login but it is synchronous and will return true or false for success.
+## loginSyncProfile(username, password, callback)
+This function is the same as loginProfile but it is synchronous and will return true or false for success.
 
 
 

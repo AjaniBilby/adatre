@@ -194,8 +194,12 @@ Database.prototype.addDrive = function(id, size, location){
     return false;
   }
   if (typeof(size) != "number"){
-    console.error("Database: cannot create drive with invalid size ("+size+"). Size must be a number");
-    return false;
+    if (isNaN(size)){
+      console.error("Database: cannot create drive with invalid size ("+size+"). Size must be a number");
+      return false;
+    }else{
+      size = parseInt(size);
+    }
   }
   if (typeof(location) != "string" || !fs.statSync(location).isDirectory()){
     console.error("Database: cannot create drive with invalid location ("+location+"). Location must be a string directing to a valid folder");
@@ -205,7 +209,7 @@ Database.prototype.addDrive = function(id, size, location){
   //Add new drive to memory
   this.drives[id] = {
     location: location,
-    size: -1
+    size: size
   };
 
   //Save drive to config
@@ -489,6 +493,9 @@ Database.prototype.exists = function(type, id, callback){
     }
     return true;
   }
+};
+Database.prototype.existsSync = function(type, id){
+  return this.exists(type, id);
 };
 Database.prototype.get = function(type, id, callback){
   //If callback is not valid then cancel function
@@ -894,6 +901,22 @@ Database.prototype.migrate = function(type, id, to, callback){
     });
   });
 };
+Database.prototype.remove = function(type, id, callback){
+  if (!this.exists(type, id)){
+    if (callback){
+      callback(true);
+    }
+    return;
+  }
+
+  if (callback){
+    fs.unlink(this.index[type][id].location, callback);
+  }else{
+    fs.unlink(this.index[type][id].location, function(){});
+  }
+
+  delete this.index[type][id];
+};
 
 //synchronous functions
 Database.prototype.newSync = function(type, id){
@@ -1075,78 +1098,80 @@ Database.prototype.migrateSync = function(type, id, to){
     return false;
   }
 };
+Database.prototype.removeSync = function(type, id){
+  if (!this.exists(type, id)){
+    return true;
+  }
+
+  var path = this.index[type][id].location;
+  delete this.index[type][id];
+
+  return fs.unlinkSync(path);
+};
 
 //Profiles
-Database.prototype.profile = {
-  loginSync: function(username, password){
+Database.prototype.newProfile = function(username, password, callback){
+  var db = this;
 
-    //Check to see if username and password are valid and exist
-    if (!username || !password){
-      return false;
+  if (this.exists('profile', username)){
+    if (typeof(callback) == "function"){callback(null);}
+    return;
+  }
+
+  var salt = crypto.randomBytes(128).toString('base64');
+  crypto.pbkdf2(password, salt, 10000, 512, 'sha512', function(err, hash){
+    if (err){
+      if (typeof(callback) == "function"){callback(null, err);}
     }
-    if (!this.exist("profile", username)) {
-      return false;
-    }
 
-    var userData = this.getSync('profile', username);
-
-    if (typeof(userData.password) == "object"){
-      if (typeof(userData.password.salt) != "string" || typeof(userData.password.hash) != "string"){
-        return false;
+    db.new('profile', username, function(success, err){
+      if (!success){
+        if (typeof(callback) == "function"){callback(null);}
+        return;
       }
-    }else{
-      return false;
-    }
 
-    var hash = crypto.pbkdf2Sync(password, userData.password.salt, 10000, 512, 'sha512');
+      db.set('profile', username, {username: username, password: {salt: salt, hash: hash.toString()}}, function(success, data){
+        if (typeof(callback) == "function"){callback(success, data);}
+      });
+    });
+  });
+};
+Database.prototype.newSyncProfile = function(username, password){
+  if (this.exists('profile', username)){
+    return null;
+  }
 
-    //Check if both Encrypted passwords are the same
-    if (userData.password.hash.toString() === hash.toString()) {
-      return true;
-    }else{
-      return false;
-    }
-  },
-  newSync: function(username, password){
-    if (this.exists('profile', username)){
-      return null;
-    }
+  var salt = crypto.randomBytes(128).toString('base64');
+  var hash = crypto.pbkdf2Sync(password, salt, 10000, 512, 'sha512');
 
-    var salt = crypto.randomBytes(128).toString('base64');
-    var hash = crypto.pbkdf2Sync(password, salt, 10000, 512, 'sha512');
+  this.newSync('profile', username);
+  this.setSync('profile', username, {username: username, password: {salt: salt, hash: hash.toString()}});
 
-    this.newSync('profile', username);
-    this.setSync('profile', username, {username: username, password: {salt: salt, hash: hash.toString()}});
+  return true;
+};
+Database.prototype.loginProfile = function(username, password, callback){
 
-    return true;
-  },
-  login: function(username, password, callback){
+  //if there is no callback then there is no point to this function
+  if (typeof(callback) != "function"){
+    return;
+  }
 
-    //if there is no callback then there is no point to this function
-    if (typeof(callback) != "function"){
-      return;
-    }
-
-    //Check to see if username and password are valid and exist
-    if (!username || !password){
-      callback(false);
-      return;
-    }
-    if (!this.exist("profile", username)) {
-      callback(false);
-      return;
-    }
+  //Check to see if username and password are valid and exist
+  if (!username || !password){
+    callback(false);
+    return;
+  }
+  if (!this.exists("profile", username)) {
+    callback(false);
+    return;
+  }
 
 
-    var userData = this.get('profile', username, function(data){
-      //Check that data is valid
-      if (typeof(data) == "object"){
-        if (typeof(userData.password) == "object"){
-          if (typeof(userData.password.salt) != "string" || typeof(userData.password.hash) != "string"){
-            callback(false);
-            return;
-          }
-        }else{
+  var userData = this.get('profile', username, function(userData){
+    //Check that data is valid
+    if (typeof(userData) == "object"){
+      if (typeof(userData.password) == "object"){
+        if (typeof(userData.password.salt) != "string" || typeof(userData.password.hash) != "string"){
           callback(false);
           return;
         }
@@ -1154,44 +1179,50 @@ Database.prototype.profile = {
         callback(false);
         return;
       }
-
-      crypto.pbkdf(password, userData.password.salt, 10000, 512, 'sha512', function(err, hash){
-        //Check if both Encrypted passwords are the same
-        if (userData.password.hash.toString() === hash.toString()) {
-          callback(true);
-          return;
-        }else{
-          callback(false);
-          return;
-        }
-      });
-    });
-  },
-  new: function(username, password, callback){
-    var db = this;
-
-    if (this.exists('profile', username)){
-      if (typeof(callback) == "function"){callback(null);}
+    }else{
+      callback(false);
       return;
     }
 
-    var salt = crypto.randomBytes(128).toString('base64');
-    crypto.pbkdf2(password, salt, 10000, 512, 'sha512', function(err, hash){
-      if (err){
-        if (typeof(callback) == "function"){callback(null, err);}
+    crypto.pbkdf2(password, userData.password.salt, 10000, 512, 'sha512', function(err, hash){
+      //Check if both Encrypted passwords are the same
+      if (userData.password.hash.toString() === hash.toString()) {
+        callback(true);
+        return;
+      }else{
+        callback(false);
+        return;
       }
-
-      db.new('profile', username, function(success, err){
-        if (!success){
-          if (typeof(callback) == "function"){callback(null);}
-          return;
-        }
-
-        db.set('profile', username, {username: username, password: {salt: salt, hash: hash.toString()}}, function(success, data){
-          if (typeof(callback) == "function"){callback(success, data);}
-        });
-      });
     });
+  });
+};
+Database.prototype.loginSyncProfile = function(username, password){
+
+  //Check to see if username and password are valid and exist
+  if (!username || !password){
+    return false;
+  }
+  if (!this.exists("profile", username)) {
+    return false;
+  }
+
+  var userData = this.getSync('profile', username);
+
+  if (typeof(userData.password) == "object"){
+    if (typeof(userData.password.salt) != "string" || typeof(userData.password.hash) != "string"){
+      return false;
+    }
+  }else{
+    return false;
+  }
+
+  var hash = crypto.pbkdf2Sync(password, userData.password.salt, 10000, 512, 'sha512');
+
+  //Check if both Encrypted passwords are the same
+  if (userData.password.hash.toString() === hash.toString()) {
+    return true;
+  }else{
+    return false;
   }
 };
 
