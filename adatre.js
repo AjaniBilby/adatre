@@ -1,6 +1,15 @@
-var fs = require('fs');
 var ob = require('object-manipulation');
+var Radix = require('custom-radix');
 var crypto = require('crypto');
+var fs = require('fs');
+
+
+var encoding = '';
+for (let i=0; i<250; i++){
+  encoding += String.fromCharCode(i);
+}
+var radixBuffer = new Radix(encoding);
+
 
 var defualtUser = {
   username: "username",
@@ -389,15 +398,26 @@ Database.prototype.list = function(type){
 
 //Buffer manipulation
 Database.prototype.BufferToObject = function(buffer){
-  return JSON.parse(JSON.stringify(buffer));
-};
-Database.prototype.BufferFromObject = function(object){
-  if (object.type != "Buffer"){
-    console.error("Invalid buffer object");
-    return null;
+  var output = [];
+
+  for (let i=0; i<buffer.length; i++){
+    output[i] = radixBuffer.convert(buffer[i]);
   }
 
-  return new Buffer(object.data);
+  return output;
+};
+Database.prototype.BufferFromObject = function(object){
+  if (object.type == "buffer"){
+    return new Buffer(object.data);
+  }
+
+  var output = [];
+
+  for (let i=0; i<array.length; i++){
+    output[i] = radixBuffer.convert(array[i]);
+  }
+
+  return new Buffer(output);
 };
 
 //OTHER
