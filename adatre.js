@@ -970,7 +970,7 @@ Database.prototype.newSync = function(type, id){
   }
 
 
-  this.writeFileSync(this.index[type][id].location, '{}');
+  this.writeFileSync(this.index[type][id].location, {});
   return true;
 };
 Database.prototype.getSync = function(type, id){
