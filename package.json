@@ -2,11 +2,11 @@
   "name": "adatre",
   "version": "1.0.8",
   "description": "Async nodejs referencing database manager",
-  "main": "adatre.js",
+  "main": "new.js",
   "scripts": {
     "install": "node install.js",
     "postinstall": "node install.js",
-    "start": "node adatre.js"
+    "start": "node new.js"
   },
   "keywords": [
     "asynchronous",

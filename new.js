@@ -1,4 +1,4 @@
-var cosf = require('cosf');
+require('./install.js');
 
 var template = require('./components/template.js');
 var drive = require('./components/drive.js');
