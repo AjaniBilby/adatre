@@ -21,6 +21,7 @@
   "license": "ISC",
   "repository": "https://github.com/Hobgoblin101/adatre",
   "dependencies": {
-    "object-manipulation": "^1.0.6"
+    "object-manipulation": "^1.0.6",
+    "cosf": "^1.0.2"
   }
 }
