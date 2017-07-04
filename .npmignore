@@ -2,3 +2,7 @@
 .gitattributes
 .git
 .jshintrc
+node_modules/
+test/
+data/
+archive/

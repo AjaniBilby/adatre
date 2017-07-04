@@ -3,6 +3,12 @@ var system = require('./system.js');
 
 
 
+/**
+ * Merg b to a (b will overwrite a)
+ * @param {object} a
+ * @param {object} b
+ * @return {object} c
+ */
 function Merg(a, b){
   isA = typeof(a) == "object";
   isB = typeof(b) == "object";
@@ -33,7 +39,12 @@ function Merg(a, b){
 
 
 
-
+/**
+ * Get template data
+ * @param {string} type
+ * @param {function} callback
+ * @return {void}
+ */
 function Get(type, callback){
   if (!Exists(type)){
     callback(null);
@@ -50,6 +61,13 @@ function Get(type, callback){
     }
   });
 }
+
+/**
+ * Apply the template to an object
+ * @param {String} type
+ * @param {object} data
+ * @param {function} callback
+ */
 function Apply(type, data, callback){
   Get(type, function(template){
     if (data){
@@ -60,6 +78,11 @@ function Apply(type, data, callback){
     }
   });
 }
+
+/**
+ * Test if a template exists
+ * @param {string} type
+ */
 function Exists(type){
   return fs.existsSync('./data/template/'+type+'.json');
 }

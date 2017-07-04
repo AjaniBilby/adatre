@@ -14,7 +14,8 @@ if (!fs.existsSync('./data/index/')){
   fs.mkdirSync('./data/index/');
 }
 if (!fs.existsSync('./data/config.json')){
-  fs.writeFileSync('./data/config.json', '{\n    "drives": {}\n}\n');
+  fs.writeFileSync('./data/config.json', '{}');
 }
-
-console.log(fs.existsSync('./data/'));
+if (!fs.existsSync('./data/drive.json')){
+  fs.writeFileSync('./data/drive.json', '{}');
+}
