@@ -31,7 +31,7 @@ function Exists(type, id){
  * @param {function} callback
  * @return {void}
  */
-function Get(type, id, callback){
+function Get(type, id, callback = function(data, err){}){
 	var path = `./data/index/${type}/${id}.csv`;
 
 	system.read(path, function(err, data){
@@ -55,7 +55,7 @@ function Get(type, id, callback){
  * @param {function} callback
  * @return {void}
  */
-function Save(type, id, data, callback){
+function Save(type, id, data, callback = function(err){}){
 	var string = '';
 	var revision;
 	var size;
@@ -83,8 +83,9 @@ function Save(type, id, data, callback){
  * @param {string} type
  * @param {string} id
  * @param {function} callback
+ * @return {void}
  */
-function Delete(type, id, callback){
+function Delete(type, id, callback = function(err){}){
 	system.delete(`./data/index/${type}/${id}.csv`, callback);
 }
 
@@ -99,11 +100,9 @@ function Delete(type, id, callback){
  * @param {function} callback
  * @return {void}
  */
-function New(type, id, callback){
+function New(type, id, callback = function(err){}){
 	if (Exists(type, id)){
-		if (callback){
-			callback(false);
-		}
+		callback(true);
 		return;
 	}
 
@@ -122,7 +121,7 @@ function New(type, id, callback){
  * @param {function} callback
  * @return {void}
  */
-function Add(type, id, driveId, callback){
+function Add(type, id, driveId, callback = function(err){}){
 
 	function hasData(data, err){
 		if (err !== null){
@@ -173,21 +172,23 @@ function Add(type, id, driveId, callback){
  * @param {function} callback
  * @return {void}
  */
-function Remove(type, id, drive, callback){
+function Remove(type, id, drive, callback = function(err){}){
 	if (drive === "MASTER"){
-		callback(false);
+		callback(errorCode[102]);
 		return;
 	}
 
 	if (!Exists(type, id)){
-		callback(true);
+		callback(null);
 		return;
 	}
 
 	Get(type, id, function(data){
+		var removed = null;
+
 		for (let i=1; i<data.length; i++){
 			if (data[i].drive === drive){
-				data.splice(i, 1);
+				removed = data.splice(i, 1)[0];
 				break;
 			}
 		}
@@ -209,13 +210,13 @@ function Remove(type, id, drive, callback){
 		//If there are no more drives, then destroy the index file
 		if (data.length <= 1){
 			Delete(type, id, function(err){
-				callback(!err);
+				callback(err, removed);
 			});
 			return;
 		}
 
 		Save(type, id, data, function(err){
-			callback(!err);
+			callback(err, removed);
 		});
 	})
 }
@@ -228,6 +229,7 @@ function Remove(type, id, drive, callback){
  * @param {number} revision
  * @param {number} size
  * @param {function} callback
+ * @return {void}
  */
 function Update(type, id, drive, revision, size, callback = function(){}){
 	if (!Exists(type, id)){
@@ -294,8 +296,9 @@ function Update(type, id, drive, revision, size, callback = function(){}){
  * @param {string} type
  * @param {string} id
  * @param {function} callback
+ * @return {void}
  */
-function Pick(type, id, callback){
+function Pick(type, id, callback = function(idexItem){}){
 	Get(type, id, function(data){
 		if (data === null){
 			callback(null);
@@ -325,6 +328,7 @@ function Pick(type, id, callback){
 /**
  * Get array of all items of the type
  * @param {string} type
+ * @return {array}
  */
 function List(type){
 	if (!system.exists('./data/index/'+type)){

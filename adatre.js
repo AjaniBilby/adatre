@@ -22,7 +22,6 @@ var Merg = require('./components/merg.js');
  */
 function New(type, id, callback = function(err){}){
 	if (index.exists(type, id)){
-		console.error('Database:', errorCode[300], type, id);
 		callback(errorCode[300]);
 		return;
 	}
@@ -31,7 +30,6 @@ function New(type, id, callback = function(err){}){
 	var selected = drive.pick([], 1, data.length);
 
 	if (!selected[0]){
-		console.error('Database:', errorCode[200]);
 		callback(errorCode[200]);
 		return;
 	}
@@ -44,7 +42,6 @@ function New(type, id, callback = function(err){}){
 
 	system.write(selected.location+type+'/'+id, data, function(err){
 		if (err){
-			console.error('Database:', errorCode[301], err);
 			callback(errorCode[301]);
 			return;
 		}
@@ -52,7 +49,6 @@ function New(type, id, callback = function(err){}){
 		drive.allocate(selected.id, data.length);
 		index.add(type, id, selected.id, function(err){
 			if (err){
-				console.error('Database:', errorCode[301], err);
 			callback(errorCode[301]);
 				return;
 			}else{
@@ -75,7 +71,7 @@ function Save(type, id, data, callback = function(err){}){
 	var returned = false;
 
 	var revision = 0;
-	var size = 0;
+	var size = data.length;
 	var count = 0;
 
 	function Rewrite(pointer){
@@ -92,18 +88,14 @@ function Save(type, id, data, callback = function(err){}){
 				return;
 			}
 
-			drive.allocate(pointer.drive, size-pointer.size);
+			drive.allocate(pointer.drive, data.length-pointer.size);
 
-			console.log('Update:', pointer.drive, revision, size);
-
-			index.update(type, id, pointer.drive, revision, size, function(err){
+			index.update(type, id, pointer.drive, revision, data.length, function(err){
 				completed += 1;
 
 				console.log(pointer.drive, err);
 
 				if (err){
-					console.error('Database:', errorCode[101], err);
-
 					if (!returned && completed >= count){
 						returned = true;
 						callback(err);
@@ -125,10 +117,7 @@ function Save(type, id, data, callback = function(err){}){
 			return;
 		}
 
-		console.log(indexData[0]);
-
 		revision = indexData[0].revision+1;
-		size = indexData[0].size;
 		returned = false;
 		completed = 1;
 		count = indexData.length;
@@ -169,7 +158,6 @@ function Get(type, id, callback = function(data, err){}){
 	index.pick(type, id, function(pointer){
 		system.read(drive.list[pointer.drive].location+'/'+type+'/'+id, function(err, data){
 			if (err){
-				console.error('Database:', errorCode[301], err);
 				callback(data, err);
 				return;
 			}
@@ -210,10 +198,9 @@ function Clone(type, id, callback = function(err){}){
 				exclude.push(item.drive);
 			}
 
-			var selected = drive.pick(exclude)[0];
+			var selected = drive.pick(exclude, 1, indexData[0].size)[0];
 
 			if (!selected){
-				console.error('Database:', errorCode[201], type, id);
 				callback(errorCode[201]);
 				return;
 			}
@@ -224,7 +211,6 @@ function Clone(type, id, callback = function(err){}){
 
 			system.write(selected.location+'/'+type+'/'+id, data, function(err){
 				if (err){
-					console.error('Database:', errorCode[301], err);
 					callback(errorCode[301]);
 					return;
 				}
@@ -232,7 +218,6 @@ function Clone(type, id, callback = function(err){}){
 				drive.allocate(selected.id, data.length);
 				index.add(type, id, selected.id, function(err){
 					if (err){
-						console.error('Database:', errorCode[301], err);
 					callback(errorCode[301]);
 						return;
 					}else{
@@ -244,6 +229,14 @@ function Clone(type, id, callback = function(err){}){
 	});
 };
 
+/**
+ * Apply the new object data over the existing item data
+ * @param {string} type
+ * @param {string} id
+ * @param {object} data
+ * @param {function} callback
+ * @return {void}
+ */
 function Set(type, id, data, callback = function(err){}){
 	Get(type, id, function(currentData, err){
 		if (err){
@@ -257,8 +250,101 @@ function Set(type, id, data, callback = function(err){}){
 	});
 }
 
+/**
+ * Remove a single instance of the item specified
+ * @param {string} type
+ * @param {string} id
+ * @param {string} drive
+ * @param {callback} callback
+ * @return {void}
+ */
+function Remove(type, id, driveID, callback = function(err){}){
+	if (!drive.list[driveID]){
+		callback(errorCode[203]);
+		return;
+	}
+
+	index.remove(type, id, driveID, function(err, pointerRemoved){
+		if (err){
+			callback(err);
+			return;
+		}
+
+		system.delete(`${drive.list[driveID].location}/${type}/${id}`, function(err){
+			if (err){
+				callback(err);
+				return;
+			}
+
+			drive.unallocate(driveID, pointerRemoved.size);
+		});
+	})
+}
+
+/**
+ * Delete every instance of a given item
+ * @param {string} type
+ * @param {string} id
+ * @param {funciton} callback
+ * @return {void}
+ */
+function Delete(type, id, callback = function(err){}){
+	var indexData;
+	var working = 0;
+
+	function Loop(i){
+		system.delete(`${drive.list[indexData[i].drive].location}/${type}/${id}`, function (err){
+			drive.unallocate(indexData[i].drive, indexData[i].size);
+
+			working -= 1;
+
+			if (working <= 0){
+				callback();
+			}
+		});
+	}
+
+	index.get(type, id, function(data, err){
+		if (err){
+			callback(err);
+			return;
+		}
+
+		indexData = data;
+
+		index.delete(type, id, function(err){
+			if (err){
+				callback(err);
+				return;
+			}
+
+			for (let i=1; i<indexData.length; i++){
+				working += 1;
+				Loop(i);
+			}
+		})
+	});
+
+	callback(true);
+}
+
+/**
+ * Move an item from one drive to another
+ * @param {string} type
+ * @param {string} id
+ * @param {string} drive
+ * @param {function} callback
+ * @return {void}
+ */
 function Migrate(type, id, drive, callback = function(err){}){
-	callback(null);
+	Clone(type, id, function(err){
+		if (err){
+			callback(err);
+			return;
+		}
+
+		Remove(type, id, drive, callback);
+	})
 }
 
 
@@ -278,5 +364,7 @@ module.exports = {
 	clone: Clone,
 	save: Save,
 	set: Set,
-	update: Set
+	update: Set,
+	migrate: Migrate,
+	delete: Delete
 };

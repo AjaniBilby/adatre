@@ -1,15 +1,15 @@
 var path = require('path');
 var fs = require('fs');
 
-var writes = {};
+var write = {};
 var read = {};
 
 function Read(file, callback = function(err, data){}){
 	file = path.resolve(file);
 
-	if (writes[file]){
+	if (write[file]){
 		//There is a write currently in process, so just use their buffered data for the read
-		callback(writes[file].d);
+		callback(write[file].d);
 		return;
 	}
 
@@ -25,7 +25,7 @@ function Read(file, callback = function(err, data){}){
 		if (read[file]){
 			while (read[file] && read[file].length > 0){
 				//Splice of each read as they are ran, so that if that callback triggers a write it cannot activate it's self again
-				read[file].splice(0, 1)[0](null, data);
+				read[file].splice(0, 1)[0](err, data);
 			}
 			read[file] = null;
 		}
@@ -46,28 +46,28 @@ function Write(file, data, callback = function(err){}){
 		read[file] = null;
 	}
 
-	if (writes[file]){
+	if (write[file]){
 		// Store the callback you are about to over write
 		// Because if prev runs another call, that may be over written by you
-		prev = writes[file].c;
+		prev = write[file].c;
 	}
 
-	writes[file] = {
+	write[file] = {
 		c: callback,
 		d: data
 	};
 
 	fs.writeFile(file, data, function(err){
-		if (writes[file]){
-			callback = writes[file].c;
-			writes[file] = null;
+		if (write[file]){
+			callback = write[file].c;
+			write[file] = null;
 			callback();
 		}else{
-			writes[file] = null;
+			write[file] = null;
 		}
 	});
 
-	if (prev){
+	if (typeof(prev) === "function"){
 		//Activate the callback you inturupted
 		prev(null);
 	}
@@ -102,7 +102,9 @@ function Delete(file, callback = function(err){}){
 
 	fs.unlink(file, callback);
 
-	prev(null);
+	if (typeof(prev) === "function"){
+		prev(null);
+	}
 };
 
 module.exports = {

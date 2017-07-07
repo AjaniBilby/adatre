@@ -70,13 +70,20 @@ function Unallocate(drive, size){
  * Load drive config
  * @param {function} callback
  */
-function Load(callback){
-  system.read('./data/drive.json', function(err, data){
-    if (data){
-      data = data;
-    }
-    callback(data);
-  });
+function Load(){
+	drives = JSON.parse(fs.readFileSync('./data/drive.json') || '{}');
+
+	for (let key in drives){
+		if (!drives[key].id){
+			drives[key].id = key;
+		}
+		if (!drives[key].used){
+			drives[key].used = 0;
+		}
+		if (!drives[key].capacity){
+			drives[key].capacity = 0;
+		}
+	}
 }
 
 /**
@@ -94,8 +101,6 @@ function Save(callback = function(){}){
 
 
 function Loop(){
-	drives = JSON.parse(fs.readFileSync('./data/drive.json') || '{}');
-
 	setTimeout(function(){
 		if (updated){
 			Save();
@@ -103,6 +108,7 @@ function Loop(){
 	}, 1000);
 }
 Loop();
+Load();
 
 
 
@@ -113,6 +119,7 @@ module.exports = {
 	list: drives,
   pick: Pick,
   allocate: Allocate,
+	unallocate: Unallocate,
   load: Load,
   save: Save
 };
