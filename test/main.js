@@ -5,7 +5,7 @@ var cosf = require('cosf');
 // adatre.clone('person', 'greg');
 adatre.save('person', 'greg', {
 	alive: true,
-	happyness: 0.8,
+	happyness: 2.2,
 	id: '4134'
 }, function(err){
 	console.log('Completed save', err);

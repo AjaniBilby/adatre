@@ -71,54 +71,87 @@ function New(type, id, callback = function(err){}){
  * @return {void}
  */
 function Save(type, id, data, callback = function(err){}){
-	index.get(type, id, function(indexData, indexErr){
-		if (indexErr){
-			callback(indexErr);
-			return;
-		}
+	var completed = 0;
+	var returned = false;
 
-		var revision = indexData[0].revision+1;
-		var size = data.length;
-		var returned = false;
-		var completed = 1;
+	var revision = 0;
+	var size = 0;
+	var count = 0;
 
-		for (let i=1; i<indexData.length; i++){ //Skip master
-			indexData[i].location = drive.list[indexData[i].drive].location;
+	function Rewrite(pointer){
+		pointer.location = drive.list[pointer.drive].location;
 
-			system.write(indexData[i].location+'/'+type+'/'+id, data, function(err){
+		system.write(pointer.location+'/'+type+'/'+id, data, function(err){
+			if (err){
+				completed += 1;
+
+				if (!returned && completed >= count){
+					returned = true;
+					callback(err);
+				}
+				return;
+			}
+
+			drive.allocate(pointer.drive, size-pointer.size);
+
+			console.log('Update:', pointer.drive, revision, size);
+
+			index.update(type, id, pointer.drive, revision, size, function(err){
+				completed += 1;
+
+				console.log(pointer.drive, err);
+
 				if (err){
-					completed += 1;
+					console.error('Database:', errorCode[101], err);
 
-					if (!returned && completed >= indexData.length){
+					if (!returned && completed >= count){
 						returned = true;
 						callback(err);
 					}
 					return;
 				}
 
-				drive.allocate(indexData[i].drive, size-indexData[i].size);
-
-				index.update(type, id, indexData[i].drive, revision, size, function(err){
-					completed += 1;
-
-					console.log('updated', i);
-
-					if (err){
-						console.error('Database:', errorCode[101], err);
-
-						if (!returned && completed >= indexData.length){
-							returned = true;
-							callback(err);
-						}
-						return;
-					}
-
-					if (!returned){
-						returned = true;
-						callback();
-					}
-				});
+				if (!returned){
+					returned = true;
+					callback();
+				}
 			});
+		});
+	}
+
+	index.get(type, id, function(indexData, indexErr){
+		if (indexErr){
+			callback(indexErr);
+			return;
+		}
+
+		console.log(indexData[0]);
+
+		revision = indexData[0].revision+1;
+		size = indexData[0].size;
+		returned = false;
+		completed = 1;
+		count = indexData.length;
+
+		for (let i=1; i<indexData.length; i++){ //Skip master
+
+			//Has the file became too large and needs to be migrated?
+			if (drive.list[indexData[i].drive].capacity <= drive.list[indexData[i].drive].used+size-indexData[i].size){
+				Migrate(type, id, indexData[i].drive, function(err){
+					if (err){
+						completed += 1;
+						if (!returned && completed >= count){
+							callback();
+						}
+					}
+
+					Rewrite(indexData[i]);
+				});
+
+				return;
+			}
+
+			Rewrite(indexData[i]);
 		}
 	});
 
@@ -222,6 +255,10 @@ function Set(type, id, data, callback = function(err){}){
 
 		Save(type, id, data, callback);
 	});
+}
+
+function Migrate(type, id, drive, callback = function(err){}){
+	callback(null);
 }
 
 

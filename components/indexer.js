@@ -192,6 +192,20 @@ function Remove(type, id, drive, callback){
 			}
 		}
 
+		//new bests
+		var bRevision = 0;
+		var bSize = 0;
+
+		for (let item of data){
+			if (item.revision > bRevision){
+				bRevision = item.revision;
+				bSize = item.size;
+			}
+		}
+
+		data[0].revision = bRevision;
+		data[0].size = bSize;
+
 		//If there are no more drives, then destroy the index file
 		if (data.length <= 1){
 			Delete(type, id, function(err){

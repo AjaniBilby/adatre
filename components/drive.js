@@ -84,7 +84,7 @@ function Load(callback){
  * @param {function} callback
  */
 function Save(callback = function(){}){
-  system.write('./data/drive.json', JSON.stringify(drives), function(){
+  system.write('./data/drive.json', JSON.stringify(drives, null, "\t"), function(){
     callback();
   });
 }
