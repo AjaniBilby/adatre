@@ -11,5 +11,6 @@ module.exports = {
 	delete: fs.unlink,
 	mkdir: fs.mkdirSync,
 	stat: fs.stat,
-	exists: fs.existsSync
+	exists: fs.existsSync,
+	readDir: fs.readdirSync
 };

@@ -22,7 +22,7 @@
   "repository": "https://github.com/Hobgoblin101/adatre",
   "dependencies": {
     "object-manipulation": "^1.0.6",
-    "cosf": "^1.0.2",
+    "cosf": "^1.0.5",
 		"custom-radix":"^1.0.3"
   }
 }

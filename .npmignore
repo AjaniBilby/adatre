@@ -1,8 +1,8 @@
-.gitignore
-.gitattributes
 .git
-.jshintrc
+archive/
+data/
 node_modules/
 test/
-data/
-archive/
+.gitignore
+.gitattributes
+todo

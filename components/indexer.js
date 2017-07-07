@@ -115,7 +115,7 @@ function New(type, id, callback){
 }
 
 /**
- * Add a drive to the index
+ * Add a drive to the index (Can create item from scratch)
  * @param {string} type
  * @param {string} id
  * @param {string} driveId
@@ -215,16 +215,22 @@ function Remove(type, id, drive, callback){
  * @param {number} size
  * @param {function} callback
  */
-function Update(type, id, drive, revision, size, callback){
+function Update(type, id, drive, revision, size, callback = function(){}){
 	if (!Exists(type, id)){
 		callback(false);
 		return;
 	}
 
-	Get(type, id, function(data){
+	Get(type, id, function(data, err){
+		if (err){
+			callback(err);
+			return;
+		}
+
 		//Best values
-		var bRevision = data[0].revision;
-		var bSize = data[0].size;
+		var bRevision = 0;
+		var bSize = 0;
+
 		var updated = false;
 
 		for (let i=1; i<data.length; i++){
@@ -248,6 +254,7 @@ function Update(type, id, drive, revision, size, callback){
 			}
 		}
 
+		//If there wasn't a pointer to update, then create it
 		if (!updated){
 			data.push({drive: drive, revision: revision, size: size});
 
@@ -263,7 +270,7 @@ function Update(type, id, drive, revision, size, callback){
 		data[0].size = bSize;
 
 		Save(type, id, data, function(err){
-			callback(!err);
+			callback(err);
 		});
 	})
 };
@@ -284,22 +291,38 @@ function Pick(type, id, callback){
 		var options = null;
 		var revision = -1;
 		for (let i=1; i<data.length; i++){
-			console.log(data[i].revision, revision);
-
 			if (data[i].revision > revision){
 				revision = data[i].revision;
-				options = [ data[i].drive ];
+				options = [ data[i] ];
 			}else if (data[i].revision === revision){
-				options.push(data[i].drive);
+				options.push(data[i]);
 			}
 		}
 
 		if (options === null){
+			callback(null);
 			return null;
 		}
 
 		callback(options[Math.floor(options.length*Math.random())]);
 	});
+}
+
+/**
+ * Get array of all items of the type
+ * @param {string} type
+ */
+function List(type){
+	if (!system.exists('./data/index/'+type)){
+		return [];
+	}
+
+	var folder = system.readDir('./data/index/'+type);
+	for (let i=0; i<folder.length; i++){
+		folder[i] = folder[i].slice(0, -4);
+	}
+
+	return folder;
 }
 
 
@@ -309,6 +332,7 @@ module.exports = {
 	get: Get,
 	add: Add,
 	pick: Pick,
+	list: List,
 	remove: Remove,
 	update: Update,
 	exists: Exists,

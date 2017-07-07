@@ -14,9 +14,9 @@ var updated = false;
  * @param {number} size
  * @return {array} list of all drive ids
  */
-function Pick(exclusion, number, size){
+function Pick(exclusion = [], number = 1, size = 0){
   var options = [];
-  for (let key of drives){
+  for (let key in drives){
     if (exclusion.indexOf(key) == -1 && drives[key].used + size < drives[key].capacity){
       var free = drives[key].capacity - drives[key].used;
       options.push([key, free]);
@@ -83,7 +83,7 @@ function Load(callback){
  * Save drive config
  * @param {function} callback
  */
-function Save(callback){
+function Save(callback = function(){}){
   system.write('./data/drive.json', JSON.stringify(drives), function(){
     callback();
   });
@@ -110,6 +110,7 @@ Loop();
 
 
 module.exports = {
+	list: drives,
   pick: Pick,
   allocate: Allocate,
   load: Load,
