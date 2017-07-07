@@ -1,3 +1,10 @@
+/*------------------------------------------------\
+|                                                 |
+| 	A library for intersecting file system calls  |
+|                                                 |
+\------------------------------------------------*/
+
+
 var path = require('path');
 var fs = require('fs');
 
