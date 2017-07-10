@@ -88,7 +88,8 @@ Capacity is in bytes
 ___
 # Advanced Interface
 These commands are only for advanced operations of which will almost never need to be used by a standard user.
-___
+
+
 ## Template
 Accessing the template object within adatre will allow you to get more data from your database.
 
@@ -104,6 +105,5 @@ Will apply the template to given data
 Callback data; error, data
 
 
-___
 ## Drive
 Accessing the drive object within adatre will allow you to get more live information about your database, but this will not be necacary for use.
