@@ -1,20 +1,43 @@
-function Merg(obj1, obj2){
-	if (typeof(obj1) != "object"){
-		return obj2;
-	}
-	if (typeof(obj2) != "object"){
-		return obj1;
-	}
+/**
+ * Merg b to a (b will overwrite a)
+ * @param {object} a
+ * @param {object} b
+ * @return {object} c
+ */
+function Merg(a, b){
+  var isA = a instanceof Object || a instanceof Array;
+	var isB = b instanceof Object || b instanceof Array;
 
-	for (let key in obj2){
-		if (typeof obj1[key] == "object" && typeof(obj2[key]) === "object"){
-			obj1[key] = Merg(obj1[key], obj2[key]);
+	if (!isA || !isB){
+		if (isA){
+			return a;
+		}else if (isB){
+			return b;
+		}else{
+			return null;
 		}
-
-		obj1[key] = obj2[key];
 	}
 
-	return obj1;
+	var c;
+	if (Array.isArray(a)){
+		c = [];
+	}else{
+		c = {};
+	}
+
+  for (let key in b){
+    if (!a[key]){
+      c[key] = b[key];
+    }else{
+      if (typeof(b[key]) === "object" && typeof(a[key]) === "object"){
+        c[key] = Merg(a[key], b[key]);
+      }else{
+        c[key] = b[key];
+      }
+    }
+  }
+
+	return c;
 }
 
 module.exports = Merg;

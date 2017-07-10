@@ -1,40 +1,6 @@
 var system = require('./system.js');
-
-
-
-
-/**
- * Merg b to a (b will overwrite a)
- * @param {object} a
- * @param {object} b
- * @return {object} c
- */
-function Merg(a, b){
-  isA = typeof(a) == "object";
-  isB = typeof(b) == "object";
-
-  if (!isA && !isB){
-    return null;
-  }else{
-    if (!isA && isB){
-      return isB;
-    }else if(isA && !isB){
-      return isA;
-    }
-  }
-
-  for (let key of b){
-    if (!a[key]){
-      a[key] = b[key];
-    }else{
-      if (typeof(b[key]) === "object" && typeof(a[key]) === "object"){
-        a[key] = Merg(a[key], b[key]);
-      }else{
-        a[key] = b[key];
-      }
-    }
-  }
-}
+var Merg = require('./merg.js');
+var Seperate = require('./seperate.js');
 
 
 
@@ -47,17 +13,17 @@ function Merg(a, b){
  */
 function Get(type, callback){
   if (!Exists(type)){
-    callback(null);
+    callback('Non Existent template', null);;
     return;
   }
 
-  system.readFile('./data/template/'+type+'.json', function(err, data){
+  system.read('./data/template/'+type+'.json', function(err, data){
     if (data){
       data = data.toString();
       data = JSON.parse(data);
-      callback(data);
+      callback(null, data);
     }else{
-      callback(null);
+      callback(err, data);
     }
   });
 }
@@ -69,13 +35,26 @@ function Get(type, callback){
  * @param {function} callback
  */
 function Apply(type, data, callback){
-  Get(type, function(template){
-    if (data){
-      data = Merg(template, data);
-      callback(data);
-    }else{
-      callback(data);
-    }
+  Get(type, function(err, template){
+    data = Merg(template, data);
+    callback(null, data);
+  });
+}
+
+/**
+ * Remove the default values of a template from the object
+ * @param {String} type
+ * @param {object} data
+ * @param {function} callback
+ */
+function Unapply(type, data, callback){
+  Get(type, function(err, template){
+    data = Seperate(template, data);
+
+		console.log(template);
+		console.log(data);
+
+    callback(null, data);
   });
 }
 
@@ -84,11 +63,12 @@ function Apply(type, data, callback){
  * @param {string} type
  */
 function Exists(type){
-  return fs.existsSync('./data/template/'+type+'.json');
+  return system.exists('./data/template/'+type+'.json');
 }
 
 module.exports = {
   get: Get,
   apply: Apply,
+	unapply: Unapply,
   exists: Exists
 };

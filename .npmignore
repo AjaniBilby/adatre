@@ -3,6 +3,8 @@ archive/
 data/
 node_modules/
 test/
+examples/
+
 .gitignore
 .gitattributes
-todo
+todo.md

@@ -93,8 +93,6 @@ function Save(type, id, data, callback = function(err){}){
 			index.update(type, id, pointer.drive, revision, data.length, function(err){
 				completed += 1;
 
-				console.log(pointer.drive, err);
-
 				if (err){
 					if (!returned && completed >= count){
 						returned = true;
@@ -111,41 +109,52 @@ function Save(type, id, data, callback = function(err){}){
 		});
 	}
 
-	index.get(type, id, function(indexData, indexErr){
-		if (indexErr){
-			callback(indexErr);
+	template.unapply(type, data, function(err, NoTemplate){
+		if (err){
+			callback(err);
 			return;
 		}
 
-		revision = indexData[0].revision+1;
-		returned = false;
-		completed = 1;
-		count = indexData.length;
+		data = cosf.encode(NoTemplate);
+		size = data.length;
 
-		for (let i=1; i<indexData.length; i++){ //Skip master
-
-			//Has the file became too large and needs to be migrated?
-			if (drive.list[indexData[i].drive].capacity <= drive.list[indexData[i].drive].used+size-indexData[i].size){
-				Migrate(type, id, indexData[i].drive, function(err){
-					if (err){
-						completed += 1;
-						if (!returned && completed >= count){
-							callback();
-						}
-					}
-
-					Rewrite(indexData[i]);
-				});
-
+		index.get(type, id, function(indexData, indexErr){
+			if (indexErr){
+				callback(indexErr);
 				return;
 			}
 
-			Rewrite(indexData[i]);
-		}
-	});
+			revision = indexData[0].revision+1;
+			returned = false;
+			completed = 1;
+			count = indexData.length;
 
-	//Do this task after load has been called, so that this possibly large task can be completed during load
-	data = cosf.encode(data);
+			for (let i=1; i<indexData.length; i++){ //Skip master
+
+				//Has the file became too large and needs to be migrated?
+				console.log(drive.list[indexData[i].drive].capacity, drive.list[indexData[i].drive].used);
+				console.log(size, indexData[i].size);
+				if (drive.list[indexData[i].drive].capacity <= drive.list[indexData[i].drive].used+size-indexData[i].size){
+					Migrate(type, id, indexData[i].drive, function(err, newDrive){
+						if (err){
+							completed += 1;
+							if (!returned && completed >= count){
+								callback(err);
+							}
+						}
+
+						indexData[i].drive = newDrive;
+
+						Rewrite(indexData[i]);
+					});
+
+					return;
+				}
+
+				Rewrite(indexData[i]);
+			}
+		});
+	});
 };
 
 /**
@@ -158,12 +167,15 @@ function Get(type, id, callback = function(data, err){}){
 	index.pick(type, id, function(pointer){
 		system.read(drive.list[pointer.drive].location+'/'+type+'/'+id, function(err, data){
 			if (err){
-				callback(data, err);
+				callback(err, data);
 				return;
 			}
 
 			data = cosf.decode(data.toString());
-			callback(data, err);
+
+			template.apply(type, data, function(err, merged){
+				callback(err, data);
+			});
 		});
 	});
 };
@@ -177,10 +189,10 @@ function Get(type, id, callback = function(data, err){}){
  * @param {string} id
  * @param {void} callback
  */
-function Clone(type, id, callback = function(err){}){
-	Get(type, id, function(itemData, itemErr){
+function Clone(type, id, callback = function(err, newDrive){}){
+	Get(type, id, function(itemErr, itemData){
 		if (itemErr){
-			callback(itemErr);
+			callback(itemErr, null);
 			return;
 		}
 
@@ -188,7 +200,7 @@ function Clone(type, id, callback = function(err){}){
 
 		index.get(type, id, function(indexData, indexErr){
 			if (indexErr){
-				callback(indexErr);
+				callback(indexErr, null);
 				return;
 			}
 
@@ -201,7 +213,7 @@ function Clone(type, id, callback = function(err){}){
 			var selected = drive.pick(exclude, 1, indexData[0].size)[0];
 
 			if (!selected){
-				callback(errorCode[201]);
+				callback(errorCode[201], null);
 				return;
 			}
 
@@ -211,17 +223,17 @@ function Clone(type, id, callback = function(err){}){
 
 			system.write(selected.location+'/'+type+'/'+id, data, function(err){
 				if (err){
-					callback(errorCode[301]);
+					callback(errorCode[301], null);
 					return;
 				}
 
 				drive.allocate(selected.id, data.length);
 				index.add(type, id, selected.id, function(err){
 					if (err){
-					callback(errorCode[301]);
+					callback(errorCode[301], null);
 						return;
 					}else{
-						callback(null);
+						callback(null, selected.id);
 					}
 				});
 			});
@@ -238,7 +250,7 @@ function Clone(type, id, callback = function(err){}){
  * @return {void}
  */
 function Set(type, id, data, callback = function(err){}){
-	Get(type, id, function(currentData, err){
+	Get(type, id, function(err, currentData){
 		if (err){
 			callback(err);
 			return;
@@ -336,14 +348,21 @@ function Delete(type, id, callback = function(err){}){
  * @param {function} callback
  * @return {void}
  */
-function Migrate(type, id, drive, callback = function(err){}){
-	Clone(type, id, function(err){
+function Migrate(type, id, drive, callback = function(err, newDrive){}){
+	Clone(type, id, function(err, newDrive){
 		if (err){
-			callback(err);
+			callback(err, null);
 			return;
 		}
 
-		Remove(type, id, drive, callback);
+		Remove(type, id, drive, function(err){
+			if (err){
+				callback(err, null);
+				return;
+			}
+
+			callback(err, newDrive);
+		});
 	})
 }
 
@@ -355,6 +374,7 @@ function Migrate(type, id, drive, callback = function(err){}){
 module.exports = {
 	template: template,
 	drive: drive,
+	index: index,
 
 	exists: index.exists,
 	list: index.list,
@@ -364,7 +384,7 @@ module.exports = {
 	clone: Clone,
 	save: Save,
 	set: Set,
-	update: Set,
 	migrate: Migrate,
+	remove: Remove,
 	delete: Delete
 };
