@@ -1,26 +1,28 @@
 {
   "name": "adatre",
-  "version": "1.0.8",
+  "version": "2.0.0",
   "description": "Async nodejs referencing database manager",
   "main": "adatre.js",
   "scripts": {
     "install": "node install.js",
     "postinstall": "node install.js",
-    "start": "node adatre.js"
+    "start": "node adatre.js",
+		"test": "node test/main.js"
   },
   "keywords": [
     "asynchronous",
     "database",
-    "management",
     "storage",
-    "reference-based",
     "template-based",
-    "synchronous"
+    "synchronous",
+		"object-orrientated"
   ],
   "author": "Ajani James Bilby",
   "license": "ISC",
   "repository": "https://github.com/Hobgoblin101/adatre",
   "dependencies": {
-    "object-manipulation": "^1.0.6"
+    "object-manipulation": "^1.0.6",
+    "cosf": "^1.0.5",
+		"custom-radix":"^1.0.3"
   }
 }

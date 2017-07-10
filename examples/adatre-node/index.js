@@ -1,0 +1,1 @@
+var adatre = require('adatre');

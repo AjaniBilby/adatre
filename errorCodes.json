@@ -1,0 +1,20 @@
+{
+	"catagories": {
+		"index": "100-199",
+		"drive": "200-299",
+		"item": "300-399"
+	},
+
+	"100": "[100] Invalid index data\n     ",
+	"101": "[101] Failed to update index\n     ",
+	"102": "[102] Cannot remove MASTER from index\n    ",
+	"103": "[103] Invalid index item\n    ",
+
+	"200": "[200] Failed to create new Item. No drives applicable\n     ",
+	"201": "[201] No more available drive to clone to\n     ",
+	"202": "[202] No available drive to migrate to\n    ",
+	"203": "[203] Invalid drive\n    ",
+
+	"300": "[300] Failed to create new Item. Item already exists\n     ",
+	"301": "[301] Failed to write database item\n     "
+}
