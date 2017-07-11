@@ -67,6 +67,11 @@ function New(type, id, callback = function(err){}){
  * @return {void}
  */
 function Save(type, id, data, callback = function(err){}){
+	if (!index.exists(type, id)){
+		callback('Invalid item');
+		return;
+	}
+	
 	var completed = 0;
 	var returned = false;
 
@@ -164,6 +169,11 @@ function Save(type, id, data, callback = function(err){}){
  * @param {function} callback
  */
 function Get(type, id, callback = function(data, err){}){
+	if (!index.exists(type, id)){
+		callback('Invalid item');
+		return;
+	}
+	
 	index.pick(type, id, function(pointer){
 		system.read(drive.list[pointer.drive].location+'/'+type+'/'+id, function(err, data){
 			if (err){
@@ -190,6 +200,11 @@ function Get(type, id, callback = function(data, err){}){
  * @param {void} callback
  */
 function Clone(type, id, callback = function(err, newDrive){}){
+	if (!index.exists(type, id)){
+		callback('Invalid item');
+		return;
+	}
+	
 	Get(type, id, function(itemErr, itemData){
 		if (itemErr){
 			callback(itemErr, null);
@@ -250,6 +265,11 @@ function Clone(type, id, callback = function(err, newDrive){}){
  * @return {void}
  */
 function Set(type, id, data, callback = function(err){}){
+	if (!index.exists(type, id)){
+		callback('Invalid item');
+		return;
+	}
+	
 	Get(type, id, function(err, currentData){
 		if (err){
 			callback(err);
@@ -271,6 +291,11 @@ function Set(type, id, data, callback = function(err){}){
  * @return {void}
  */
 function Remove(type, id, driveID, callback = function(err){}){
+	if (!index.exists(type, id)){
+		callback('Invalid item');
+		return;
+	}
+	
 	if (!drive.list[driveID]){
 		callback(errorCode[203]);
 		return;
@@ -301,6 +326,11 @@ function Remove(type, id, driveID, callback = function(err){}){
  * @return {void}
  */
 function Delete(type, id, callback = function(err){}){
+	if (!index.exists(type, id)){
+		callback('Invalid item');
+		return;
+	}
+	
 	var indexData;
 	var working = 0;
 
@@ -349,6 +379,11 @@ function Delete(type, id, callback = function(err){}){
  * @return {void}
  */
 function Migrate(type, id, drive, callback = function(err, newDrive){}){
+	if (!index.exists(type, id)){
+		callback('Invalid item');
+		return;
+	}
+	
 	Clone(type, id, function(err, newDrive){
 		if (err){
 			callback(err, null);

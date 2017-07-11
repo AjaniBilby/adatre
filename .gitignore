@@ -52,4 +52,4 @@ Temporary Items
 # My
 node_modules/*
 data/
-*/node_modules/*
+examples/adatre-node/node_modules/
